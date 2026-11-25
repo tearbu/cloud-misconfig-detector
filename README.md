@@ -53,6 +53,26 @@ Five steps, each a separate piece:
    A detector that cries wolf on safe changes gets muted, and a
    muted detector is worse than none.
 
+The flow as a diagram, the same one ARCHITECTURE.md walks
+through in full:
+
+```mermaid
+flowchart LR
+    A[API call in the account] --> B[CloudTrail records a management event]
+    B --> C[EventBridge default event bus<br/>'AWS API Call via CloudTrail']
+    C --> D{EventBridge rule<br/>event name matches the covered list}
+    D -->|no match| E[Event ends, nothing runs]
+    D -->|match| F[Lambda: detector function]
+    F --> G[rules.evaluate_event<br/>fixed rule set, no AWS calls]
+    G -->|no findings| H[Invocation ends, nothing published]
+    G -->|one finding per message| I[SNS topic: alerts]
+    I --> J[Subscribers: email, chat webhook,<br/>or a ticket queue]
+```
+
+One precondition sits under the whole diagram: a CloudTrail
+trail has to be logging management events in the region, or the
+events never reach the bus and nothing downstream runs.
+
 The nine rules: public S3 bucket policy, public S3 ACL, security
 group ingress open to the internet (rated critical when SSH, RDP,
 or all ports are in range, high otherwise), IAM policies granting
