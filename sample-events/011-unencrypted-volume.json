@@ -1,0 +1,39 @@
+{
+  "version": "0",
+  "id": "fictional-event-id",
+  "detail-type": "AWS API Call via CloudTrail",
+  "source": "aws.ec2",
+  "account": "123456789012",
+  "time": "2026-11-25T12:11:00Z",
+  "region": "us-east-1",
+  "resources": [],
+  "detail": {
+    "eventVersion": "1.09",
+    "userIdentity": {
+      "type": "IAMUser",
+      "principalId": "AIDAFICTIONALDEV0002",
+      "arn": "arn:aws:iam::123456789012:user/jordan.dev",
+      "accountId": "123456789012",
+      "userName": "jordan.dev"
+    },
+    "eventTime": "2026-11-25T12:00:00Z",
+    "eventSource": "ec2.amazonaws.com",
+    "eventName": "CreateVolume",
+    "awsRegion": "us-east-1",
+    "sourceIPAddress": "203.0.113.10",
+    "userAgent": "console.amazonaws.com",
+    "requestParameters": {
+      "size": 20,
+      "availabilityZone": "us-east-1a",
+      "volumeType": "gp3",
+      "encrypted": false
+    },
+    "responseElements": {
+      "volumeId": "vol-0123456789abcdef0"
+    },
+    "readOnly": false,
+    "eventType": "AwsApiCall",
+    "managementEvent": true,
+    "recipientAccountId": "123456789012"
+  }
+}

@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Event-driven detector for AWS misconfigurations. CloudTrail
+  management events reach EventBridge, an EventBridge rule forwards
+  the covered API calls to a Lambda function, the function scores
+  each event against a fixed rule set, and findings go to an SNS
+  topic. The function's only AWS permission is sns:Publish on its
+  own topic. It reads nothing, stores nothing, and cannot change
+  anything in the account.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+
+Resources:
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-alerts"
+      DisplayName: Cloud misconfiguration alerts
+
+  DetectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-detector"
+      CodeUri: src/
+      Handler: handler.lambda_handler
+      Description: Scores CloudTrail events against misconfiguration rules and publishes findings to SNS.
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref AlertsTopic
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref AlertsTopic
+      Events:
+        MisconfigEvents:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - prefix: aws.
+              detail-type:
+                - AWS API Call via CloudTrail
+              detail:
+                eventName:
+                  - PutBucketPolicy
+                  - PutBucketAcl
+                  - AuthorizeSecurityGroupIngress
+                  - CreatePolicy
+                  - PutUserPolicy
+                  - PutRolePolicy
+                  - PutGroupPolicy
+                  - AttachUserPolicy
+                  - AttachRolePolicy
+                  - AttachGroupPolicy
+                  - ConsoleLogin
+                  - StopLogging
+                  - DeleteTrail
+                  - CreateVolume
+                  - ModifySnapshotAttribute
+
+Outputs:
+  AlertsTopicArn:
+    Description: SNS topic that receives one message per finding; subscribe an email or a chat webhook to it after deploy
+    Value: !Ref AlertsTopic
+  DetectorFunctionName:
+    Description: Name of the detector Lambda function
+    Value: !Ref DetectorFunction
