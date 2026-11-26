@@ -290,24 +290,29 @@ three of this repo's own sample events. The results:
 - 012-benign-sg-scoped.json returned {"findings": 0, "published": 0, "rules_fired": []}
 
 "Published" means the function sent a message to the SNS topic.
-The topic has no subscription yet, so those messages reached no
-inbox. Subscribing one is still a manual step:
+At that point the topic had no subscription, so those messages
+reached no inbox.
 
-```bash
-aws sns subscribe --topic-arn <AlertsTopicArn from the stack outputs> \
-  --protocol email --notification-endpoint you@example.com
-```
+I finished the setup later the same day. I created a
+CloudTrail trail named misconfig-detector-trail, logging
+management events to a bucket named
+cloudtrail-logs-762103021017, with IsLogging true and log
+delivery to the bucket confirmed. I also subscribed my own
+email address to the alerts topic and confirmed the
+subscription, so findings are now emailed.
 
-The honest limit of this deployment: the account has no
-CloudTrail trail. I checked with aws cloudtrail describe-trails
-and the list came back empty. The EventBridge rule only
-receives "AWS API Call via CloudTrail" events when a trail is
-logging management events, so the stack is verified at the
-function level and its live event feed is dormant until a trail
-exists. I did not create one during the deployment. A trail
-needs an S3 bucket to hold its logs, and I left that as a
-decision to make on purpose rather than a side effect of
-deploying a detector. The full record is in
+Then I ran the end-to-end test. I opened TCP port 22 to
+0.0.0.0/0 on a scratch security group at 19:11:48 EST, and the
+detector function was invoked at 19:11:53 EST, about five
+seconds later, returning {"findings": 1, "published": 1,
+"rules_fired": ["SG_OPEN_INGRESS"]}. I revoked the rule and
+deleted the scratch group afterwards, so the account was left
+clean. One caveat: whether the alert email for that single
+test finding reached my inbox is uncertain, because the
+subscription confirmation and the publish happened minutes
+apart and SNS only delivers to subscriptions confirmed at
+publish time. Findings from now on go to a confirmed
+subscription. The full record is in
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Worth
@@ -350,17 +355,16 @@ Honest limits, stated plainly:
   AdministratorAccess policy specifically. A customer managed
   policy with wildcard contents is caught when it is created or
   written inline, not when it is attached.
-- **Delivery is fast, not instant.** CloudTrail events typically
-  reach EventBridge within minutes. That is quick enough to fix
-  a mistake the same hour; it is not a preventive control, and
-  nothing here blocks the change itself.
-- **The live event feed is unverified.** The stack is deployed
-  and the function passed direct invocation tests in the real
-  account, but the account has no CloudTrail trail, so no real
-  event has yet flowed from CloudTrail through EventBridge to
-  the function. End to end live detection stays unproven until
-  a trail exists and one covered change is made on purpose to
-  watch the alert arrive.
+- **Delivery is fast, not instant, and nothing here prevents
+  anything.** In the live end-to-end test the event reached the
+  function about five seconds after the change. That is one
+  observation, not a timing guarantee. Either way this is a
+  detector, not a preventive control: it reports the change, it
+  does not block it.
+- **Alert delivery depends on subscription state.** SNS only
+  delivers a message to subscriptions that are confirmed at the
+  moment it is published. A topic with no subscription, or one
+  still waiting on confirmation, swallows findings silently.
 
 ## Layout
 
