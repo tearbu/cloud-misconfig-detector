@@ -260,34 +260,55 @@ topic, and an IAM action list of exactly sns:Publish scoped to
 that topic. It passed. What it cannot do is run the SAM transform
 or deploy anything, so it cannot rule out transform errors or
 event pattern mistakes that only appear in a real account. Only a
-deployment settles that, and it has not happened yet for this
-project.
+deployment settles that, and I have since made that deployment;
+the Deployment section below and docs/DEPLOYMENT.md carry the
+record.
 
 ## Deployment
 
-Not yet done. The template is built for a live deployment with
-SAM from CloudShell, and the steps when it happens are:
+Done. I deployed this stack live on 25 November 2026, from
+CloudShell with SAM, into account 762103021017 in us-east-1.
+The stack is named cloud-misconfig-detector and it finished at
+CREATE_COMPLETE. The commands were the two the template was
+built for:
 
 ```bash
 sam build --template-file template.yaml
-sam deploy --guided --stack-name cloud-misconfig-detector
+sam deploy --stack-name cloud-misconfig-detector --resolve-s3
 ```
 
-Two things to have ready first: a CloudTrail trail logging
-management events in the account (the detector listens to the
-trail; without one there is nothing to hear), and an email or
-chat destination to subscribe to the alerts topic afterwards:
+The stack outputs gave me the two values that matter:
+
+- AlertsTopicArn: arn:aws:sns:us-east-1:762103021017:cloud-misconfig-detector-alerts
+- DetectorFunctionName: cloud-misconfig-detector-detector
+
+I verified the deployed function by invoking it directly with
+three of this repo's own sample events. The results:
+
+- 001-s3-public-policy.json returned {"findings": 1, "published": 1, "rules_fired": ["S3_PUBLIC_POLICY"]}
+- 003-sg-open-ssh.json returned {"findings": 1, "published": 1, "rules_fired": ["SG_OPEN_INGRESS"]}
+- 012-benign-sg-scoped.json returned {"findings": 0, "published": 0, "rules_fired": []}
+
+"Published" means the function sent a message to the SNS topic.
+The topic has no subscription yet, so those messages reached no
+inbox. Subscribing one is still a manual step:
 
 ```bash
 aws sns subscribe --topic-arn <AlertsTopicArn from the stack outputs> \
   --protocol email --notification-endpoint you@example.com
 ```
 
-After deployment, the honest test is to make one covered change
-on purpose, an ingress rule opened to a test address range in a
-scratch security group, and watch the alert arrive. Until that
-run happens, everything verified about this project is local:
-the rules, the handler, and the template's structure.
+The honest limit of this deployment: the account has no
+CloudTrail trail. I checked with aws cloudtrail describe-trails
+and the list came back empty. The EventBridge rule only
+receives "AWS API Call via CloudTrail" events when a trail is
+logging management events, so the stack is verified at the
+function level and its live event feed is dormant until a trail
+exists. I did not create one during the deployment. A trail
+needs an S3 bucket to hold its logs, and I left that as a
+decision to make on purpose rather than a side effect of
+deploying a detector. The full record is in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Worth
 
@@ -333,12 +354,13 @@ Honest limits, stated plainly:
   reach EventBridge within minutes. That is quick enough to fix
   a mistake the same hour; it is not a preventive control, and
   nothing here blocks the change itself.
-- **Nothing has been deployed yet.** Every result above is a
-  local run of the same code the template deploys. The live
-  wiring between CloudTrail, EventBridge, and the function is
-  the standard pattern and the template validates structurally,
-  but it is unverified in a real account until the deployment
-  above happens.
+- **The live event feed is unverified.** The stack is deployed
+  and the function passed direct invocation tests in the real
+  account, but the account has no CloudTrail trail, so no real
+  event has yet flowed from CloudTrail through EventBridge to
+  the function. End to end live detection stays unproven until
+  a trail exists and one covered change is made on purpose to
+  watch the alert arrive.
 
 ## Layout
 
@@ -350,6 +372,7 @@ template.yaml   AWS SAM template: Lambda, EventBridge rule, SNS topic
 run_demo.py     the local end to end run over the sample events
 validate_template.py   structural check of the SAM template
 ARCHITECTURE.md flow, rule table, permissions, and cost in full
+docs/           DEPLOYMENT.md, the record of the live deployment
 ```
 
 ## License
